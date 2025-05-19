@@ -1,6 +1,7 @@
 // services/usersService.js
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs  } from 'firebase/firestore';
 import db from '../firebaseConfig.js';
+import CryptoJS from 'crypto-js';
 
 export async function getAllUsers() {
     const usersCol = collection(db, 'users');  // 'users' is your collection name
@@ -9,13 +10,28 @@ export async function getAllUsers() {
     return usersList;
 }
 
-// Get a user by username (if needed)
-export const getUserByUsername = async (username) => {
-    const usersRef = ref(db, 'users');
-    const snapshot = await get(usersRef);
-    if (!snapshot.exists()) return null;
 
-    const users = snapshot.val();
-    const user = Object.values(users).find(u => u.username === username);
-    return user || null;
-};
+function hashPassword(password) {
+    return CryptoJS.SHA256(password).toString(CryptoJS.enc.Hex);
+}
+
+// Get user by username (for Firestore)
+export async function getUserByUsername(username) {
+    const usersCol = collection(db, 'users');
+    const q = query(usersCol, where('username', '==', username));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) return null;
+
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() };
+}
+
+// Verify login
+export async function verifyLogin(username, password) {
+    const user = await getUserByUsername(username);
+    if (!user) return false;
+
+    const hashedInputPassword = hashPassword(password);
+    return user.password === hashedInputPassword;
+}
